@@ -1,5 +1,7 @@
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.util.ArrayList;
 
 public class SortedListGUI extends JFrame {
@@ -7,6 +9,7 @@ public class SortedListGUI extends JFrame {
     private final JTextArea outputArea = new JTextArea(15, 30);
     private final JTextField inputField = new JTextField(20);
     private final JLabel statusLabel = new JLabel(" ");
+    private JButton addButton;
     private String listName;
 
     public SortedListGUI() {
@@ -19,7 +22,7 @@ public class SortedListGUI extends JFrame {
         topPanel.add(new JLabel("Enter String:"));
         topPanel.add(inputField);
 
-        JButton addButton = new JButton("Add");
+        addButton = new JButton("Add");
         JButton searchButton = new JButton("Search");
         JButton clearButton = new JButton("Clear List");
 
@@ -57,37 +60,36 @@ public class SortedListGUI extends JFrame {
         searchButton.addActionListener(e -> {
             String text = inputField.getText().trim();
             outputArea.setText("");
+
             if (!text.isEmpty()) {
                 int result = listSorter.binarySearch(text);
                 int count = listSorter.size();
 
-                ArrayList<String> items = listSorter.getDisplayList();
-                StringBuilder builder = new StringBuilder();
-
-                builder.append(listName).append("\n\n");
-                builder.append("+------------+-----------------+\n");
-                builder.append(String.format("| %-10s | %-15s |\n", "Position", "Item"));
-                builder.append("+------------+-----------------+\n");
-
-                for (int i = 0; i < items.size(); i++) {
-                    String item = items.get(i);
-                    boolean isMatch = (result == i);
-                    String arrow = isMatch ? "→" : " ";
-                    builder.append(String.format("| %s%-9d | %s%-14s |\n", arrow, i + 1, arrow, item));
-                }
-
-                builder.append("+------------+-----------------+\n");
-
                 if (result >= 0) {
-                    builder.append("\n").append(items.get(result)).append(" is found in Position ").append(result + 1).append("\n");
+                    displaySearchResult(text, result);
                     updateStatus("Search: \"" + text + "\" → Found at position " + (result + 1) + " | Items in List: " + count);
                 } else {
-                    builder.append("\n\"").append(text).append("\" not found\n");
+                    int insertPos = -result - 1;
                     updateStatus("Search: \"" + text + "\" → Not found | Items in List: " + count);
-                }
 
-                outputArea.setText(builder.toString());
+                    int choice = JOptionPane.showConfirmDialog(
+                            this,
+                            "\"" + text + "\" was not found in the list.\n" +
+                                    "Would you like to add it to the sorted list in position " + (insertPos + 1) + "?",
+                            "Item Not Found",
+                            JOptionPane.YES_NO_OPTION,
+                            JOptionPane.QUESTION_MESSAGE
+                    );
+
+                    if (choice == JOptionPane.YES_OPTION) {
+                        listSorter.add(text);
+                        int newIndex = listSorter.binarySearch(text);
+                        displaySearchResult(text, newIndex);
+                        updateStatus("Search: \"" + text + "\" → Found at position " + (newIndex + 1) + " | Items in List: " + listSorter.size());
+                    }
+                }
             }
+
             inputField.setText("");
         });
 
@@ -97,15 +99,33 @@ public class SortedListGUI extends JFrame {
             updateStatus("List cleared | Items in List: 0");
         });
 
+        setKeyboardShortcuts();
         pack();
         setLocationRelativeTo(null);
         setVisible(true);
     }
 
-    private String promptForListName() {
-        String name = JOptionPane.showInputDialog(this, "Enter a name for your list:", "Name Your List", JOptionPane.PLAIN_MESSAGE);
-        return (name != null && !name.trim().isEmpty()) ? name.trim() : "Untitled";
+    private void displaySearchResult(String query, int matchIndex) {
+        ArrayList<String> items = listSorter.getDisplayList();
+        StringBuilder builder = new StringBuilder();
+
+        builder.append(listName).append("\n\n");
+        builder.append("+------------+-----------------+\n");
+        builder.append(String.format("| %-10s | %-15s |\n", "Position", "Item"));
+        builder.append("+------------+-----------------+\n");
+
+        for (int i = 0; i < items.size(); i++) {
+            String item = capitalize(items.get(i));
+            builder.append(String.format("| %-10d | %-15s |\n", i + 1, item));
+        }
+
+        builder.append("+------------+-----------------+\n");
+        builder.append("\n→ ").append(capitalize(items.get(matchIndex)))
+                .append(" is found in Position ").append(matchIndex + 1).append("\n");
+
+        outputArea.setText(builder.toString());
     }
+
 
     private void displayList() {
         ArrayList<String> items = listSorter.getDisplayList();
@@ -117,7 +137,7 @@ public class SortedListGUI extends JFrame {
         builder.append("+------------+-----------------+\n");
 
         for (int i = 0; i < items.size(); i++) {
-            builder.append(String.format("| %-10d | %-15s |\n", i + 1, items.get(i)));
+            builder.append(String.format("| %-10d | %-15s |\n", i + 1, capitalize(items.get(i))));
         }
 
         builder.append("+------------+-----------------+\n");
@@ -125,7 +145,46 @@ public class SortedListGUI extends JFrame {
         outputArea.setText(builder.toString());
     }
 
+    private String promptForListName() {
+        String name = JOptionPane.showInputDialog(this, "Enter a name for your list:", "Name Your List", JOptionPane.PLAIN_MESSAGE);
+        return (name != null && !name.trim().isEmpty()) ? name.trim() : "Untitled";
+    }
+
     private void updateStatus(String message) {
         statusLabel.setText(message);
+    }
+
+    private String capitalize(String input) {
+        if (input == null || input.isEmpty()) return input;
+        return input.substring(0, 1).toUpperCase() + input.substring(1).toLowerCase();
+    }
+
+    private void setKeyboardShortcuts() {
+        JRootPane rootPane = getRootPane();
+
+        rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("ENTER"), "addItem");
+        rootPane.getActionMap().put("addItem", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                if (inputField.hasFocus()) {
+                    for (ActionListener al : addButton.getActionListeners()) {
+                        al.actionPerformed(new ActionEvent(addButton, ActionEvent.ACTION_PERFORMED, null));
+                    }
+                }
+            }
+        });
+
+        rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("control F"), "focusInput");
+        rootPane.getActionMap().put("focusInput", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                inputField.requestFocusInWindow();
+            }
+        });
+
+        rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("ESCAPE"), "clearInput");
+        rootPane.getActionMap().put("clearInput", new AbstractAction() {
+            public void actionPerformed(ActionEvent e) {
+                inputField.setText("");
+            }
+        });
     }
 }
